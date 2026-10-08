@@ -1,0 +1,66 @@
+.Rhistory
+.RData
+.Ruserdata
+.Rtmp/
+.Rproj.user/
+*.Rcheck/
+*.tar.gz
+*.Rproj.user
+.Rproj.user/
+
+.quarto/
+notebooks/*.html
+notebooks/*_files/
+_freeze/
+*_cache/
+
+.conda/
+.conda-env/
+env/
+venv/
+.venv/
+conda-meta/
+
+data/raw/*
+!data/raw/.gitkeep
+results/objects/*
+!results/objects/.gitkeep
+# this way the project structure on github remains consistent
+# it also saves plots and tables for sharing purposes
+
+scratch/
+tmp/
+temp/
+
+.Rtmp/
+
+*~
+*.bak
+*.tmp
+*.swp
+*.swo
+*.swn
+
+Session.vim
+Sessionx.vim
+
+.nvim/
+
+# Linux / desktop environment
+.directory
+.Trash-*
+
+# macOS, in case the repository is ever opened there
+.DS_Store
+
+# Windows, in case the repository is ever opened there
+Thumbs.db
+Desktop.ini
+
+*.log
+
+.env
+.env.*
+!.env.example
+
+AGENTS.md

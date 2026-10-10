@@ -1,0 +1,12 @@
+project:
+  type: default
+  execute-dir: project
+
+format:
+  html:
+    toc: true
+
+execute:
+  echo: true
+  warning: true
+  message: false

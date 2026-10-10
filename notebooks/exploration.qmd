@@ -1,0 +1,20 @@
+---
+title: "Entropy-stemness exploration notebook"
+format: html
+---
+
+# R snippet
+
+This is an R snippet
+
+```{R}
+a <- 25
+```
+
+This is a python snippet
+
+```{python}
+a = 3
+b = 2
+a+b
+```

@@ -2,6 +2,13 @@
 
 ## Project setup
 
+### Version control and environment tracking
+
+This project uses git for version control.
+To make it reproducible on any machine, it uses a conda environment.
+This is where all the dependencies are listed and can be installed from.
+
+
 ### Project blueprint
 
 - immutable raw data

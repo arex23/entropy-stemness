@@ -1,5 +1,7 @@
 .Rhistory
 .RData
+*.rds
+*.rda
 .Ruserdata
 .Rtmp/
 .Rproj.user/
@@ -23,8 +25,8 @@ conda-meta/
 
 data/raw/*
 !data/raw/.gitkeep
-results/objects/*
-!results/objects/.gitkeep
+results/**/objects/*
+!results/**/objects/.gitkeep
 # this way the project structure on github remains consistent
 # it also saves plots and tables for sharing purposes
 

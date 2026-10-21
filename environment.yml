@@ -1,9 +1,33 @@
-name: meningioma-entropy
+name: gpu-meningioma-entropy
+# Additional R installations (not installed by Conda from this YAML):
+# SpaNorm 1.7.15 from https://github.com/BhuvaLab/SpaNorm
+# Git commit: ec6dd518f77f8e170e782d0f7695df352985ca01 (2026-10-19).
+# After activating this environment, reproduce the SpaNorm installation with:
+#   git clone https://github.com/BhuvaLab/SpaNorm.git /tmp/SpaNorm
+#   git -C /tmp/SpaNorm checkout ec6dd518f77f8e170e782d0f7695df352985ca01
+#   R CMD INSTALL /tmp/SpaNorm
+# R torch 0.17.0 uses the official build with bundled CUDA 12.8 and cuDNN.
+# Install it once from R in this environment (the download is about 3.8 GB):
+# Use a disk-backed TMPDIR before starting R; /tmp on this machine uses RAM.
+# For example: mkdir -p scratch/torch-install
+#              export TMPDIR="$PWD/scratch/torch-install"
+#   options(timeout = 1800, repos = c(
+#     torch = "https://torch-cdn.mlverse.org/packages/cu128/0.17.0/",
+#     CRAN = "https://cloud.r-project.org"))
+#   install.packages("torch", dependencies = FALSE)
+# Check in a fresh R session: torch::cuda_is_available()
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - quarto
+  # R dependencies of the manually installed CUDA-enabled torch package.
+  - r-callr=3.7.6
+  - r-coro=1.1.0
+  - r-desc=1.4.3
+  - r-processx=3.9.0
+  - r-ps=1.9.3
+  - r-safetensors=0.2.0
+  #- quarto
   - r-rmarkdown
   - _openmp_mutex=4.5=20_gnu
   - _r-mutex=1.0.1=anacondar_1
@@ -79,7 +103,6 @@ dependencies:
   - make=4.4.1=hb9d3cd8_2
   - ncurses=6.6=hdb14827_0
   - openssl=3.6.2=h35e630c_0
-  - pandoc=3.9.0.2=ha770c72_0
   - pango=1.56.4=hda50119_1
   - pcre2=10.47=haa7fec5_0
   - pixman=0.46.4=h54a6638_1
@@ -251,6 +274,4 @@ dependencies:
   - xorg-libxext=1.3.7=hb03c661_0
   - xorg-libxrender=0.9.12=hb9d3cd8_0
   - zstd=1.5.7=hb78ec9c_6
-  - bioconductor-spanorm=1.4.0=r45hdfd78af_0
   - bioconductor-spatialexperiment=1.20.0=r45hdfd78af_0
-prefix: /home/alexej/miniforge3/envs/stemness

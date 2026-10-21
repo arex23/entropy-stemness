@@ -1,0 +1,2 @@
+"sample","backend","elapsed_seconds","genes_before","genes_used","spots","min_spot_prop","sample_p","df_tps","adj_method","seed","adjustment_block_mib","spanorm_version","torch_version","gpu_memory_budget_gib","openblas_threads"
+"sample1","gpu",452.209,37082,12384,11713,0.1,0.25,6,"logpac",36,32,"1.7.15","0.17.0",2,"default"

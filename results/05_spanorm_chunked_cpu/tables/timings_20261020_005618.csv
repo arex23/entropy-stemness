@@ -1,0 +1,8 @@
+"sample","backend","elapsed_seconds","genes_before","genes_used","spots","min_spot_prop","sample_p","df_tps","adj_method","seed","adjustment_block_mib","adjustment_workers","spanorm_version","openblas_threads"
+"sample1","cpu",344.297,37082,12384,11713,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample2","cpu",139.759,37082,7705,9303,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample3","cpu",250.664,37082,12874,8458,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample4","cpu",177.94,37082,12404,5422,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample5","cpu",288.146,37082,11893,10195,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample6","cpu",215.43,37082,10863,9062,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"
+"sample7","cpu",227.283,37082,11214,8745,0.1,0.25,6,"logpac",36,128,2,"1.7.15","default"

@@ -9,6 +9,7 @@
 *.tar.gz
 *.Rproj.user
 .Rproj.user/
+*.Rproj
 
 .quarto/
 notebooks/*.html

@@ -1,13 +1,3 @@
-# Purpose: Normalize each sample with CUDA model fitting and gene chunks
-#          for count adjustment, and record elapsed normalization time.
-# Input:   results/01_load_and_compute_entropy/objects/sampleX_seurat.rds
-# Output:  results/05_spanorm_chunked_gpu/objects/sampleX_seurat.rds
-#          results/05_spanorm_chunked_gpu/tables/timings_<run>.csv
-#          results/05_spanorm_chunked_gpu/tables/session_<run>.txt
-# Run from the project root in the gpu-meningioma-entropy Conda environment.
-# Run the CPU and GPU scripts separately, in fresh R sessions.
-
-# Keep these settings identical in the CPU and GPU scripts.
 #SAMPLES_TO_RUN <- "sample1"  # Or "all", or c("sample1", "sample2").
 #SAMPLES_TO_RUN <- "all"
 SAMPLES_TO_RUN <- paste0("sample", 8:22)
@@ -17,10 +7,10 @@ DF_TPS <- 6
 ADJ_METHOD <- "logpac"
 RANDOM_SEED <- 36
 ADJUSTMENT_BLOCK_MIB <- 128
-ADJUSTMENT_WORKERS <- 2L  # CPU workers for step (2/2) logpac adjustment; use 1L for serial.
-SAVE_COMPRESS <- FALSE    # FALSE avoids ~4-5 min of gzip compression on the 1.1 GiB dense matrix.
+ADJUSTMENT_WORKERS <- 2L  
+SAVE_COMPRESS <- FALSE   
 BACKEND <- "gpu"
-GPU_MEMORY_BUDGET_GIB <- 4  # >2.7 GiB allows sample1 (12384 x 2928) to fit in 1 GPU block on the 6 GB RTX 4050.
+GPU_MEMORY_BUDGET_GIB <- 4
 
 suppressPackageStartupMessages({
   library(Seurat)
@@ -39,28 +29,16 @@ if (packageVersion("SpaNorm") < "1.7.15") {
   stop("Use the GitHub SpaNorm installation in gpu-meningioma-entropy.")
 }
 
-# SpaNorm can silently fall back to CPU even when backend = "gpu". Refuse
-# that fallback here, otherwise the timing would not measure GPU use.
 if (!isTRUE(torch::cuda_is_available())) {
   stop("CUDA is unavailable to R torch. Check this environment and the NVIDIA driver.")
 }
 SpaNorm::resetGPUCache()
 if (SpaNorm::getBackendDevice() != "cuda") stop("SpaNorm did not select CUDA.")
 SpaNorm::setGPUMemoryBudget(GPU_MEMORY_BUDGET_GIB * 1024^3)
-# Initialize CUDA outside the timer; the reported time measures normalization.
 invisible(torch::torch_ones(1, device = "cuda")$sum()$item())
 torch::cuda_synchronize()
 torch::cuda_empty_cache()
 message("CUDA enabled; fitting memory budget: ", GPU_MEMORY_BUDGET_GIB, " GiB")
-# GPU fitting is automatically blocked when its estimated memory exceeds this
-# budget. Count adjustment still runs on the CPU, in the same chunks as the
-# CPU script. The budget is an estimate, not a hard VRAM allocation limit.
-
-# A DelayedArray wrapper tells SpaNorm to adjust counts in gene blocks. The
-# underlying counts remain sparse and in RAM; no HDF5 files are needed.
-# This budget describes ONE dense matrix per adjustment block, not total RAM.
-# SpaNorm still holds the final matrix and the sampled fitting data in RAM;
-# its input checks can also temporarily realize the count matrix.
 DelayedArray::setAutoBlockSize(ADJUSTMENT_BLOCK_MIB * 1024^2)
 bpparam <- if (ADJUSTMENT_WORKERS > 1L) {
   BiocParallel::MulticoreParam(workers = ADJUSTMENT_WORKERS)
@@ -68,8 +46,8 @@ bpparam <- if (ADJUSTMENT_WORKERS > 1L) {
   BiocParallel::SerialParam()
 }
 
-dir_input <- here::here("results", "01_load_and_compute_entropy", "objects")
-dir_results <- here::here("results", "05_spanorm_chunked_gpu")
+dir_input <- here::here("results","optional_05_chunked", "01_load_and_compute_entropy", "objects")
+dir_results <- here::here("results","optional_05_chunked", "05_spanorm_chunked_gpu")
 dir_objects <- file.path(dir_results, "objects")
 dir_tables <- file.path(dir_results, "tables")
 
@@ -99,8 +77,6 @@ for (sample_name in samples_to_process) {
   n_genes_before <- nrow(counts_mat)
   n_spots_before <- ncol(counts_mat)
 
-  # Retain the same filter as script 05: genes detected in >=10% of spots.
-  # This changes the gene set, so use the same filter in both comparisons.
   keep_genes <- rownames(counts_mat)[
     Matrix::rowSums(counts_mat > 0) / ncol(counts_mat) >= MIN_SPOT_PROP
   ]
@@ -109,8 +85,6 @@ for (sample_name in samples_to_process) {
   seurat_obj <- subset(seurat_obj, features = keep_genes)
   counts_mat <- Seurat::GetAssayData(seurat_obj, assay = "Spatial", layer = "counts")
 
-  # Remove spots with zero total counts after gene filtering. SpaNorm requires
-  # positive library sizes, and zero-count spots have undefined Shannon entropy.
   spot_totals <- Matrix::colSums(counts_mat)
   if (any(spot_totals == 0)) {
     zero_spots <- colnames(counts_mat)[spot_totals == 0]
@@ -128,7 +102,6 @@ for (sample_name in samples_to_process) {
   n_genes <- nrow(counts_mat)
   n_spots <- ncol(counts_mat)
 
-  # Align image coordinates to the count matrix by spot barcode.
   coords_df <- Seurat::GetTissueCoordinates(seurat_obj)
   if ("cell" %in% colnames(coords_df)) rownames(coords_df) <- coords_df$cell
   if (!all(c("x", "y") %in% colnames(coords_df)) ||
@@ -151,10 +124,6 @@ for (sample_name in samples_to_process) {
     n_spots, "/", n_spots_before, " spots"
   )
 
-  # Fit ONE spatial model for the complete sample. SpaNorm then applies that
-  # model in gene chunks, preserving the shared library-size and dispersion
-  # calculations. Splitting samples into independent SpaNorm calls would
-  # change those calculations and would not be the same analysis.
   torch::cuda_synchronize()
   set.seed(RANDOM_SEED)
   elapsed_seconds <- system.time({
@@ -168,11 +137,9 @@ for (sample_name in samples_to_process) {
       overwrite = TRUE,
       verbose = TRUE
     )
-    # Wait for queued CUDA work before stopping the timer.
     torch::cuda_synchronize()
   })[["elapsed"]]
 
-  # logpac is log2(percentile-adjusted counts + 1), not raw counts or entropy.
   seurat_obj <- Seurat::SetAssayData(
     seurat_obj, assay = "Spatial", layer = "data",
     new.data = SingleCellExperiment::logcounts(spe)
@@ -181,8 +148,6 @@ for (sample_name in samples_to_process) {
   rm(spe)
   gc(verbose = FALSE)
 
-  # Timing includes fitting and count adjustment; loading, filtering, and
-  # saving are excluded. A new CSV per run preserves repeated measurements.
   timings <- rbind(timings, data.frame(
     sample = sample_name, backend = BACKEND, elapsed_seconds = elapsed_seconds,
     genes_before = n_genes_before, genes_used = n_genes,
@@ -197,7 +162,6 @@ for (sample_name in samples_to_process) {
     openblas_threads = Sys.getenv("OPENBLAS_NUM_THREADS", unset = "default")
   ))
   write.csv(timings, timing_file, row.names = FALSE)
-  # Repeated runs replace this backend's saved object, but keep their timings.
   saveRDS(
     seurat_obj,
     file.path(dir_objects, paste0(sample_name, "_seurat.rds")),

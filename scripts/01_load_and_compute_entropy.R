@@ -1,12 +1,12 @@
-#SAMPLES_TO_RUN <- "sample1"
-SAMPLES_TO_RUN <- "all"
+# 1. Dependencies and configuration
 
-suppressPackageStartupMessages({
-  library(Seurat)
-  library(ggplot2)
-  library(patchwork)
-  library(here)
-})
+SAMPLES_TO_RUN <- "sample1"
+#SAMPLES_TO_RUN <- "all"
+
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(here)
 
 source(here::here("R", "shannon_entropy.R"))
 
@@ -33,60 +33,53 @@ if (identical(SAMPLES_TO_RUN, "all")) {
   samples_to_process <- SAMPLES_TO_RUN
 }
 
-message("=== Starting Analysis: 01_load_and_compute_entropy ===")
-message("Samples selected to process: ", paste(samples_to_process, collapse = ", "))
+# 2. Processing loop
 
 for (sample_name in samples_to_process) {
-  message("\n------------------------------------------------------------")
+  
+  # A. Load Seurat object
   message("Processing: ", sample_name)
-  message("------------------------------------------------------------")
   
   sample_dir <- file.path(dir_raw, sample_name)
-  
-  if (!dir.exists(sample_dir)) {
-    warning("Directory not found for ", sample_name, ". Skipping...")
-    next
-  }
   
   h5_files <- list.files(sample_dir, pattern = "\\.h5$", full.names = FALSE)
   if (length(h5_files) == 0) {
     warning("No .h5 matrix file found in ", sample_dir, ". Skipping...")
     next
   }
+  
   h5_filename <- h5_files[1]
   
-  message("-> Loading 10x Visium data from: ", h5_filename)
+  message("Loading 10x Visium data from: ", h5_filename)
   seurat_obj <- Seurat::Load10X_Spatial(
     data.dir      = sample_dir,
     filename      = h5_filename,
     filter.matrix = TRUE  
   )
-
-  positions <- read.csv(file.path(sample_dir, "spatial", "tissue_positions.csv"))
-  in_tissue <- positions$in_tissue[match(colnames(seurat_obj), positions$barcode)]
-  if (anyNA(in_tissue)) {
-    stop("Missing tissue flags for spots in ", sample_name)
-  }
-  tissue_spots <- colnames(seurat_obj)[in_tissue == 1]
-  message("-> Keeping ", length(tissue_spots), " of ", ncol(seurat_obj), " spots marked in tissue")
-  seurat_obj <- subset(seurat_obj, cells = tissue_spots)
   
+  seurat_obj <- subset(seurat_obj, cells = Cells(seurat_obj[[Images(seurat_obj)[1]]])) 
   seurat_obj$sample <- sample_name
+
+  # B. Save the Seurat object on disk
   
   rds_file <- file.path(dir_objects, paste0(sample_name, "_seurat.rds"))
-  message("-> Saving plain Seurat object to: ", rds_file)
+  message("Saving plain Seurat object to: ", rds_file)
   saveRDS(seurat_obj, file = rds_file)
   
-  message("-> Calculating Shannon entropy per spot...")
+  # C. Calculate Shannon entropy
+  
+  message("Calculating Shannon entropy")
   seurat_obj <- calculate_shannon_entropy(
     seurat_obj = seurat_obj,
     assay      = "Spatial",
     layer      = "counts",
     col_name   = "shannon_entropy"
   )
+
+  # D. Save summary table 
   
   csv_file <- file.path(dir_tables, paste0(sample_name, "_entropy.csv"))
-  message("-> Saving summary table to: ", csv_file)
+  message("Saving summary table to: ", csv_file)
   
   entropy_df <- data.frame(
     spot_id      = colnames(seurat_obj),
@@ -98,8 +91,10 @@ for (sample_name in samples_to_process) {
   )
   write.csv(entropy_df, file = csv_file, row.names = FALSE)
   
+  # E. Save spatial plots
+  
   fig_file <- file.path(dir_figures, paste0(sample_name, "_spatial_entropy.png"))
-  message("-> Generating dual spatial plot: ", fig_file)
+  message("Generating dual spatial plot: ", fig_file)
   
   p1 <- Seurat::SpatialPlot(seurat_obj, pt.size.factor = 0) +
     ggplot2::ggtitle(paste0(sample_name, " - H&E Histology")) +
@@ -124,10 +119,12 @@ for (sample_name in samples_to_process) {
     dpi      = 300
   )
   
+  # F. Clean up memory
+  
   rm(seurat_obj, entropy_df, dual_plot, p1, p2)
   gc(verbose = FALSE)
   
-  message("-> Done with ", sample_name, "!")
+  message("Done with ", sample_name)
 }
 
 

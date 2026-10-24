@@ -1,0 +1,217 @@
+---
+title: "09_entropy_standard_deviation"
+author: "Alexej Fioroni"
+format: html
+---
+
+## Contents and purpose
+
+This script's job is to calculate standard deviation of entropy values PER SAMPLE, once for each method (plugin, Chao-Shen, CWJ and SpaNorm).
+To do so it will take the resulting .csv tables that come from the previous script's results (so from those of `01_load_and_compute_entropy/tables/`, `03_compute_alternative_entropies/tables/` and `06_compute_spanorm_entropy/tables/`) and will make a new script that has a separate ranking for each method, in order to find out what are the samples with the highest variability.
+
+### 1. Dependencies and configuration
+
+No particular packages are required since this is just some regular R stuff and .csv manipulation.
+We will still use `here` to be consistent with the previous script's way of handling file paths.
+
+```{R}
+#| eval: false
+library(here)
+```
+
+We can easily recycle the same input and output handling structure we've been using since script 01, by creating paths from the previous script's results and creating a new results folder for this script, which will just contain a `tables/` subfolder.
+
+Let's select our inputs like we're used to:
+
+```{R}
+dir_input_plugin  <- here::here("results", "01_load_and_compute_entropy", "tables")
+dir_input_alt     <- here::here("results", "03_compute_alternative_entropies", "tables")
+dir_input_spanorm <- here::here("results", "06_compute_spanorm_entropy", "tables")
+```
+
+Then we take care of our outputs:
+
+```{R}
+dir_results <- here::here("results", "09_entropy_standard_deviation")
+dir_tables  <- file.path(dir_results, "tables")
+```
+
+We could make it simpler by directly creating the `tables/` subfolder in one go but let's keep this consistent with our previous work.
+Again we add the directory creation line but it will not be needed after GitHub cloning:
+
+```{R}
+dir.create(dir_tables, recursive = TRUE, showWarnings = FALSE)
+```
+
+Now since we have to handle many different lists (at most 22 x 4 if we decide to run the script on all samples), we'll naturally initialize a list of files coming from our previously selected input directories like this:
+
+```{R}
+all_csv_files <- list.files(dir_input_plugin, pattern = "_entropy\\.csv$", full.names = FALSE)
+```
+
+I don't know why I'm so dumb with regex but I used AI again to make the most compact regex selection for our use case.
+
+We can now do our usual trick for having ordered sample processing:
+
+```{R}
+all_samples   <- gsub("_entropy\\.csv$", "", all_csv_files)
+sample_numbers <- as.numeric(gsub("sample", "", all_samples))
+all_samples    <- all_samples[order(sample_numbers)]
+```
+
+Now the good old sample selection toggle, and the if else that handles what the `samples_to_process` variable will be:
+
+```{R}
+if (identical(SAMPLES_TO_RUN, "all")) {
+  samples_to_process <- all_samples
+} else {
+  samples_to_process <- SAMPLES_TO_RUN
+}
+```
+
+We're good to go on with the scripts actual logic.
+
+
+### 2. Processing loop
+
+Let's start by initializing an empty list, where we'll store our dataframes as they get generated.
+
+```{R}
+summary_list <- list()
+```
+
+Then, once again, we start a loop that will repeat the logic for each sample we selected.
+
+```{R}
+for (sample in samples_to_process) {
+  
+  message("\nProcessing: ", sample_name)
+```
+
+#### A. Load tables
+
+We set where the .csv tables would come from previously, now we actually define their file based on the sample we're currently processing:
+
+```{R}
+  file_plugin  <- file.path(dir_input_plugin,  paste0(sample_name, "_entropy.csv"))
+  file_alt     <- file.path(dir_input_alt,     paste0(sample_name, "_alternative_entropies.csv"))
+  file_spanorm <- file.path(dir_input_spanorm, paste0(sample_name, "_spanorm_entropy.csv"))
+```
+
+Since our script depends on the output of previous files, it's reasonable to set a check for the existance of such output, so that the user is informed that he still has something to run:
+
+```{R}
+  if (!file.exists(file_plugin) || !file.exists(file_alt) || !file.exists(file_spanorm)) {
+    warning("Missing input files for ", sample_name, ". Skipping...")
+    next
+  }
+```
+
+
+We can finally load our beloved .csvs into R:
+
+```{R}
+  df_plugin  <- read.csv(file_plugin,  stringsAsFactors = FALSE)
+  df_alt     <- read.csv(file_alt,     stringsAsFactors = FALSE)
+  df_spanorm <- read.csv(file_spanorm, stringsAsFactors = FALSE)
+```
+
+#### B. Compute standard deviation
+
+Let's now get to the actual calculation of the standard deviation.
+It is actually pretty intuitive as we just need to use the `sd()` R function on the appropriate columns of our tables.
+
+```{R}
+  sd_plugin    <- sd(df_plugin$entropy[is.finite(df_plugin$entropy)])
+  sd_chao_shen <- sd(df_alt$chao_shen_entropy[is.finite(df_alt$chao_shen_entropy)])
+  sd_cwj       <- sd(df_alt$cwj_entropy[is.finite(df_alt$cwj_entropy)])
+  sd_spanorm   <- sd(df_spanorm$spanorm_entropy[is.finite(df_spanorm[[spanorm_col]])])
+```
+
+The `is.finite()` is needed to exclude NA spots if they are present (possible if there are spots with 0 counts in tissue in the RDS object that generated them, for which the entropy is not defined).
+
+Now that we have the values we can store them in dataframe form, inside the list we previously initialized:
+
+```{R}
+  summary_list[[sample_name]] <- data.frame(
+    sample    = sample_name,
+    plugin    = sd_plugin,
+    chao_shen = sd_chao_shen,
+    cwj       = sd_cwj,
+    spanorm   = sd_spanorm,
+    stringsAsFactors = FALSE
+  )
+```
+
+As the loop progresses, `summary_list` will get populated with a dataframe for each sample.
+
+#### C. Memory clean up
+
+These tables are pretty lightweight so it's not fundamental to have garbage collection, but it's still good practice to end the iteration with it:
+```{R}
+  rm(df_plugin, df_alt, df_spanorm)
+  
+  message("Done with ", sample_name)
+}
+```
+
+This concludes our list.
+
+### 3. Ranking and saving
+
+At this point of the code, after all iterations have finished, we are left with a list of dataframes.
+The point of the script is to rank the samples with the highest standard deviation, so before saving the results in a summary table, we should order the samples based on how big the sd is.
+
+Since the metrics are different, it's likely that we will not get the same order across methods, so we calculate the ranking PER METHOD.
+
+The first thing we need to do is to stitch the dataframes in the list together in one single dataframe.
+Since there are 4 columns in each containing the values, we want to stack them vertically using `rind()`.
+
+We implement a simple for loop to create our full dataframe:
+
+```{R}
+sd_df <- data.frame()
+
+for (df in summary_list) {
+  sd_df <- rbind(sd_df, df)
+}
+rownames(sd_df) <- NULL
+```
+
+There are better ways to do this (gemini suggested doing something with `do_call()` but that's mainly because of how R handles memory, which for 22 samples is just not a problem we should worry about).
+
+We remove row names to avoid having two row 1s in the full dataframe.
+
+We can now order the samples based on their standard deviations:
+
+```{R}
+ord_plugin    <- order(-sd_df$plugin,    sd_df$sample, na.last = TRUE)
+ord_chao_shen <- order(-sd_df$chao_shen, sd_df$sample, na.last = TRUE)
+ord_cwj       <- order(-sd_df$cwj,       sd_df$sample, na.last = TRUE)
+ord_spanorm   <- order(-sd_df$spanorm,   sd_df$sample, na.last = TRUE)
+```
+
+In this way we have an ordered list of standard deviations per sample, that we can put in a new dataframe that we'll then write on file:
+
+```{R}
+ranked_table <- data.frame(
+  "plugin"    = paste0(sd_df$sample[ord_plugin],    ": ", sd_df$plugin[ord_plugin]),
+  "chao-shen" = paste0(sd_df$sample[ord_chao_shen], ": ", sd_df$chao_shen[ord_chao_shen]),
+  "cwj"       = paste0(sd_df$sample[ord_cwj],       ": ", sd_df$cwj[ord_cwj]),
+  "spanorm"   = paste0(sd_df$sample[ord_spanorm],   ": ", sd_df$spanorm[ord_spanorm]),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+```
+
+We're done: we have a dataframe with a column for each method where we stored the ordered samples and their sd.
+
+What's left is to just save it to an appropriate .csv:
+
+```{R}
+csv_file <- file.path(dir_tables, "entropy_sd_ranked.csv")
+message("Saving ranked SD table to: ", csv_file)
+write.csv(ranked_table, file = csv_file, row.names = FALSE)
+```
+
+We choose our .csv name inside our tables directory, and write the dataframe to it.

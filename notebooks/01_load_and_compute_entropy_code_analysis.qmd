@@ -1,0 +1,325 @@
+---
+title: "01_load_and_compute_entropy_analysis"
+author: "Alexej Fioroni"
+format: html
+---
+
+## Contents and purpose
+
+This script has 5 main jobs: 1. Load a sample's .h5 file from the appropriate `data/raw` folder as a Seurat object for both this and future steps 2. Save the Seurat object in the appropriate `results/objects` folder 3. Apply the sourced `R/shannon_entropy.R` function on the object's spots 4. Save a .csv table containing a summary of the object + the entropy values, to prevent saving of a new heavy Seurat object 5. Save a `SpatialFeaturePlot()` along with the original H&E image to show entropy distribution on the sample
+
+### 1. Dependencies and configuration
+
+The first thing to do is always to load the required dependencies.
+
+```{R}
+#| eval: false
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(here)
+```
+
+A few comments about the packages used:
+
+- `Seurat`: the main package we'll be using since we use its object class to load the spatial data into a format that we can interact with
+
+- `ggplot2`: required to make the `SpatialFeaturePlot()` that Seurat uses
+
+- `patchwork`: same reason, it allows to compose multiple plot layouts, extending ggplot2's functionality
+
+- `here`: useful to work with relative paths for files; in this analysis we'll often need to use objects contained in other folders and this package makes it easy to do that
+
+Then we source the shannon entropy function with:
+
+```{R}
+#| eval: false
+source(here::here("R", "shannon_entropy.R"))
+```
+
+As you can see, we used `here` to select the folder where out custom functions lie. I'll keep addressig you as "you" for the time being even though I'll probably be the only one to read this Quarto document. Oh well.
+
+Next step is to set all our input and output folders, another operation that `here` makes very easy:
+
+```{R}
+#| eval: false
+dir_raw <- here::here("data", "raw")
+
+dir_results <- here::here("results", "01_load_and_compute_entropy")
+dir_objects <- file.path(dir_results, "objects")
+dir_tables  <- file.path(dir_results, "tables")
+dir_figures <- file.path(dir_results, "figures")
+```
+
+This should be pretty clear:
+
+1.  We set our input directory as `dir_raw`, that is where the sample folders are located; we use `here` to tell R: look at the project root (`entropy-stemness/`) and then go to `data/raw`
+
+2.  We set the output directories so
+
+    i.  first we choose where the outputs will lie - for this project I intend to have separate output folders for each script, so in this case our `dir_results` will be `results/01_load_and_compute_entropy/`
+
+    ii. second we separate our outputs by category; since we said we'd save a Seurat object, a .csv table and a plot, we'll need an `objects`, `tables` and `figures` directory inside `dir_results`, so we use R's standard `file.path()` function to construct them, starting from the results directory we previously chose
+
+Not needed, but I inserted a snippet to create the folders if they are not present yet (although they should be if you just clone the GitHub repo):
+
+```{R}
+#| eval: false
+dir.create(dir_objects, recursive = TRUE, showWarnings = FALSE)
+dir.create(dir_tables,  recursive = TRUE, showWarnings = FALSE)
+dir.create(dir_figures, recursive = TRUE, showWarnings = FALSE)
+```
+
+Note that `recursive = TRUE` makes it so the directory contained in the variable `dir_objects`, which should be `results/01_load_and_compute_entropy/objects` doesn't just create `objects` (which is only the last element and would thus fail if for example `01_load_and_compute_entropy/` didn't exist), but also the parent folders.
+
+### Sample processing
+
+Finally, we select our sample(s). I want the script to handle both one single sample, for testing or not having to run everything from the start if for some reason it fails mid run, and all samples present in the `data/raw` folder. We start by first selecting our desired input:
+
+```{R}
+#| eval: false
+#SAMPLES_TO_RUN <- "all"
+SAMPLES_TO_RUN <- "sample1"
+```
+
+Uncomment the other line to change the mode. In this script we'll have sample1 selected because I'd rather not run everything 22 times.
+
+Let's implement the logic for handling sample loading:
+
+```{R}
+#| eval: false
+all_sample_dirs <- list.dirs(dir_raw, full.names = FALSE, recursive = FALSE)
+all_sample_dirs <- grep("^sample", all_sample_dirs, value = TRUE)
+```
+
+In this snippet we tell R to look at the contents of our `dir_raw` directory (remember that the `dir_raw` variable refers to `data/raw`), creating a list with the names of the direcotory. Per how I saved the samples, the directory names are simply `sample1`,`sample2`, etc. That's why we use grep to extract every folder that starts with "sample" (the "starts with" regex command is "\^"), in case there are other folders that don't follow my arbitrary convention (if in the raw folder we had something like "testsample/" it would be ignored).
+
+```{R}
+#| eval: false
+sample_numbers  <- as.numeric(gsub("sample", "", all_sample_dirs))
+all_sample_dirs <- all_sample_dirs[order(sample_numbers)]
+```
+
+The two lines above are needed so that when you select `SAMPLES_TO_RUN <- "all"` the samples are processed in order (1 to 22 in our case) (AI generated because I couldn't think of a way to do this in a simple way, but it's not super important)
+
+It's time to finally tell the script to do different things based on our `SAMPLES_TO_RUN` choice:
+
+```{R}
+#| eval: false
+if (identical(SAMPLES_TO_RUN, "all")) {
+  samples_to_process <- all_sample_dirs
+} else {
+  samples_to_process <- SAMPLES_TO_RUN
+}
+```
+
+### 2. Processing loop
+
+#### A. Load Seurat object
+
+The processing happens inside a loop, since we might have more than one sample selected. Obviously, if `samples_to_process` is just a single sample, the loop will only iterate one time.
+
+```{R}
+#| eval: false
+for (sample_name in samples_to_process) {
+  message("Processing: ", sample_name)
+  
+  sample_dir <- file.path(dir_raw, sample_name)
+```
+
+We start the for loop by first creating the `sample_dir` variable, where we convert each element of `samples_to_process`, which we called `sample_name` in the for loop declaration, to a file path. If you already forgot what `dir_raw` is like I did, it's just `data/raw` that we declared at the start of the script.
+
+Let's take a look at how a sample folder is structured:
+
+```{txt}
+
+GSM9372563_MNG_Sample_01_raw_feature_bc_matrix.h5 # binary containing everything
+
+spatial/
+├─ aligned_fiducials.jpg
+├─ aligned_tissue_image.jpg
+├─ cytassist_image.tiff
+├─ detected_tissue_image.jpg
+├─ scalefactors_json.json
+├─ spatial_enrichment.csv
+├─ tissue_hires_image.png # H&E image
+├─ tissue_lores_image.png
+├─ tissue_positions.csv 
+
+```
+
+To convert the spatial data into a Seurat object, we need the file where the actual values (barcodes, UMI counts, position information etc.) are stored, and that file is the `.h5` file. I have no idea of how it's structured, and it's also compressed in binary so it's not like you inspect it in any way, but it contains all the data that Seurat needs to build an object. Let's use some regex to get the files.
+
+```{R}
+#| eval: false
+  h5_files <- list.files(sample_dir, pattern = "\\.h5$", full.names = FALSE)
+  if (length(h5_files) == 0) {
+    warning("No .h5 matrix file found in ", sample_dir, ". Skipping...")
+    next
+  }
+  h5_filename <- h5_files[1]
+```
+
+This snippet has been corrected by AI because I myself have no idea of the correct best practices and safety checks to apply in a project. It looks through the folder and creates a list of all the possible .h5 files, saving them inside `h5_files`. The it performs a safety check which skips the folder if there is not .h5 file inside. Finally, it retains the filename of the first element of the file list as `h5_filename`.
+
+This is not entirely needed as there is always 1 .h5 file, not one less not more, but it doesn't hurt to have these checks in case you forget something when creating the sample folders.
+
+Once we have the .h5 file's name, we can finally load it as a Seurat object:
+
+```{R}
+#| eval: false
+  message("-> Loading data from: ", h5_filename) # this message is useful beacuse the script could get stuck in this step
+  seurat_obj <- Seurat::Load10X_Spatial(
+    data.dir      = sample_dir,
+    filename      = h5_filename,
+    filter.matrix = TRUE  # Filter the image coordinates to only use ones that are effectively part of the tissue
+  )
+```
+
+The Seurat loading function is `Load10X_Spatial()`, which has a bunch of arguments but the only relevant ones for us are: `data_dir`, which is pretty self explanatory and takes `sample_dir`, which is just `data/raw/sampleXX`; `filename` which corresponds to the .h5 file we previously found; and `filter.matrix`, which is set to true because it filters the matrix to only keep the spots that are actually on tissue and not somewhere else in the slide. If you're wondering why we wrote `Seurat::Load10X_Spatial()` instead of just `Load10X_Spatial()`, it's only because I read it's good practice to specify this for code sharing so it's more clear. Technically you could also use it to not declare `package(Seurat)` at the start but why not?
+
+Since we'll have analyses per sample in later scripts, we should eliminate from our Seurat object all the spots that are not part of the tissue. Luckily, we already flagged them inside the object when we wrote `filter.matrix = TRUE`, so we just have to add one line to subset the object to everything that is flagged as `in_tissue`.
+
+```{R}
+#| eval: false
+  seurat_obj <- subset(seurat_obj, cells = Cells(seurat_obj[[Images(seurat_obj)[1]]])) 
+```
+
+It's a long and clunky line, but that's just because of the Seurat object's architecture, and you won't really need to understand it and can just copy it if you ever find yourself needing to apply this filtering somewhere else.
+
+We can now save our sample name in the object metadata, and this concludes our loading step.
+
+```{R}
+#| eval: false
+  seurat_obj$sample <- sample_name
+```
+
+#### B. Save the Seurat object on disk
+
+When you run this loading step, you will notice that it takes a little time, like a few seconds, because it has to decompress the .h5 file, replace \_ with - (don't know why but the warning tells you that), and other stuff. For this reason, it's useful to save a copy of the already created Seurat object on disk, so we can just load it later in our next scripts.
+
+```{R}
+#| eval: false
+  rds_file <- file.path(dir_objects, paste0(sample_name, "_seurat.rds"))
+  message("Saving plain Seurat object to: ", rds_file)
+  saveRDS(seurat_obj, file = rds_file)
+```
+
+Note that saveRDS is not a specific Seurat function and it's actually used in general when you need to save an R object. After all a Seurat object is just a class of R object, so usually a container for a matrix and some other stored vectors plus metadata.
+
+#### C. Calculate Shannon entropy
+
+Now that we have our object in memory that we can call with `seurat_obj`, let's apply the shannon entropy function that we conveniently loaded at the start to its spots:
+
+```{R}
+#| eval: false
+  message("Calculating Shannon entropy")
+  seurat_obj <- calculate_shannon_entropy(
+    seurat_obj = seurat_obj,
+    assay      = "Spatial",
+    layer      = "counts",
+    col_name   = "shannon_entropy"
+  )
+```
+
+The function will magically and autonomously create a new metadata column with all the entropy values, and output the updated Seurat object. Check its Quarto notebook to learn more about it (I'm not even sure I'll get to making one).
+
+#### D. Save summary table
+
+We added the entropy counts on the object, but we had already saved the Seurat object previously, why didn't we just wait for the entropy column to save it? This was a design choice I thought about and I came to the conclusion that having the entropy values (for now only the plugin estimator ones, but later in the pipeline we'll also calculate it with other metrics) only inside the Seurat object would've been inconvenient for the next analyses. Seurat objects are slow to load, plus if I wanted to add metadata columns for other metrics I'd have to save a new bunch of them, and an uncompressed folder of 22 of them is about 25Gb. My initial thought was then to make a lightweight .csv summary table to access just for downstream analysis, but at that point why even save the updated Seurat object? So I decided to save the object exclusively for loading later, and have the entropy values saved in a table, and this is the same structure I decided to keep later on with the other metrics.
+
+Here's the code for that:
+
+```{R}
+#| eval: false
+  csv_file <- file.path(dir_tables, paste0(sample_name, "_entropy.csv"))
+  message("Saving summary table to: ", csv_file)
+  
+  entropy_df <- data.frame(
+    spot_id      = colnames(seurat_obj),
+    entropy      = seurat_obj$shannon_entropy,
+    nCount_RNA   = seurat_obj$nCount_Spatial,
+    nFeature_RNA = seurat_obj$nFeature_Spatial,
+    sample       = sample_name,
+    stringsAsFactors = FALSE
+  )
+  write.csv(entropy_df, file = csv_file, row.names = FALSE)
+```
+
+This is a pretty intuitive snippet: we create a new empty file and then we create a data frame (which is just a table object) with all the columns we might need for downstream analysis, and then we write that dataframe on the file we just created.
+
+The sample column is arguably not needed but you never know if you might have to combine tables together, so that could be useful to keep track of where the values come from.
+
+#### E. Save spatial plots
+
+The most important way to inspect our changes in entropy is a useful spatial plot, that luckily is easily provided by Seurat with `SpatialFeaturePlot()`. These plots overlap a map of points with different colours depending on the intensity, onto the H&E images of the slides present in the sample's `spatial` folder.
+
+I had already tested this and knew that the entropy values would be super depended on per spot cell density (the entropy values seemed to closesly follow the underlying image) so I decided to output the plots next to the original image, to make it easier to compare them. This is possible thanks to `patchwork` that we loaded at the strat of the script, so we'll make a p1 plot and p2 plot, and then patch them together to create the final image.
+
+We start by creating the file path we'll use to tell ggsave where to save the plots.
+
+```{R}
+#| eval: false
+  fig_file <- file.path(dir_figures, paste0(sample_name, "_spatial_entropy.png"))
+  message("Generating dual spatial plot: ", fig_file)
+```
+
+We're ready to create the plots, so we'll start with the left one, where we'll just have to load the H&E image.
+
+```{R}
+#| eval: false
+  p1 <- Seurat::SpatialPlot(seurat_obj, pt.size.factor = 0) +
+    ggplot2::ggtitle(paste0(sample_name, " - H&E Histology")) +
+    ggplot2::theme(
+      plot.title      = ggplot2::element_text(hjust = 0.5, face = "bold", size = 14),
+      legend.position = "none"
+    )
+```
+
+To have an image that will be just like the one on the actual plot, with no weird size differences or position quirks, we'll have to make it a spatial plot (Seurat's plot object) where we have points of 0 size so they don't appear on the image. Then we put a nice title and tell it not to make a legend since there are no parameters to show here.
+
+For the right part we'll use `SpatialFeaturePlot()` to actually plot the values from our matedata column onto the spatial image (actually `SpatialFeaturePlot()` is the same type of object as `SpatialPlot()`, it's just a wrapper with some differently predefined parameters).
+
+```{R}
+#| eval: false
+  p2 <- Seurat::SpatialFeaturePlot(seurat_obj, features = "shannon_entropy") +
+    ggplot2::ggtitle(paste0(sample_name, " - Shannon Entropy")) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", size = 14)
+    )
+```
+
+Just like before, we create a new plot p2, tell the function what feature we want to plot, in this case the Shannon entropy value, which will automatically create an appropriate legend, and then add a title.
+
+Now we just need to combine the two plots together and save them to an image with ggsave:
+
+```{R}
+#| eval: false
+  dual_plot <- p1 | p2
+  
+  ggplot2::ggsave(
+    filename = fig_file,
+    plot     = dual_plot,
+    width    = 12,
+    height   = 6,
+    dpi      = 300
+  )
+```
+
+#### F. Clean up memory
+
+Since it's likely that we'll do more than one sample per script run, it's important to free memory after we're done working with a Seurat object, otherwise we'll risk going OOM, so we apply basic garbage collection:
+
+```{R}
+#| eval: false
+  rm(seurat_obj, entropy_df, dual_plot, p1, p2)
+  gc(verbose = FALSE)
+```
+
+And with that our loop is done and the script is complete.
+
+```{R}
+#| eval: false
+  message("Done with ", sample_name)
+}
+```

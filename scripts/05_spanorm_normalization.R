@@ -19,7 +19,7 @@ suppressPackageStartupMessages({
   library(here)
 })
 
-dir_input_objects <- here::here("results", "01_load_and_compute_entropy", "objects")
+dir_input_objects <- here::here("results", "00_load_and_filter_seurat", "objects", "unfiltered")
 
 dir_results <- here::here("results", "05_spanorm_normalization")
 dir_objects <- file.path(dir_results, "objects")

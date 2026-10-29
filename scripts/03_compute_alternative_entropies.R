@@ -11,7 +11,7 @@ suppressPackageStartupMessages({
 source(here::here("R", "chao_shen_entropy.R"))
 source(here::here("R", "chao_wang_jost_entropy.R"))
 
-dir_input_objects <- here::here("results", "01_load_and_compute_entropy", "objects")
+dir_input_objects <- here::here("results", "00_load_and_filter_seurat", "objects", "filtered")
 
 dir_results <- here::here("results", "03_compute_alternative_entropies")
 dir_tables  <- file.path(dir_results, "tables")

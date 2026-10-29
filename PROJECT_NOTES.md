@@ -89,27 +89,12 @@ TODO: analyze script 3 output and create script 4 for correlation analysis
 
 TODO: create script 06 for entropy calculation on the normalized data; create script 07 for a comparison across all methods; revise all script functioning and clean up the code
 
-## Project components analysis
+### 2026-10-26
 
-### R/shannon_entropy.R
-
-This is the shannon entropy function that is applied to the Seurat object and adds the entropy values to it.
-TODO: explain how it works line by line
-
-### scripts/01_load_and_compute_entropy.R
-
-### scripts/02_entropy_depth_correlation.R
-
-### R/chao_shen_entropy.R
-
-### R/chao_wang_jost_entropy.R
-
-### scripts/03_compute_alternative_entropies.Run
-
-### scripts/04_alternative_entropy_depth_correlation.R
-
-### scripts/05_spanorm_normalization
-
-#### 05_spanorm_chunked_cpu
-
-#### 05_spanorm_chunked_gpu
+Interesting results for script 10:
+- sample 5 graphs seem to match, in particular the lower part has both high entropy and high module score
+- vaguely also samlple 9 in the top left
+- sample 15 is a bit more difficult to tell since entropy is high everywhere
+- sample 19 same
+That's it.
+Which is pretty much nothing so this analysis kind of failed.

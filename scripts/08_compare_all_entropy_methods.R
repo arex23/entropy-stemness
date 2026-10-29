@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
   library(here)
 })
 
-dir_objects_01 <- here::here("results", "01_load_and_compute_entropy", "objects")
+dir_objects_01 <- here::here("results", "00_load_and_filter_seurat", "objects", "filtered")
 dir_tables_01  <- here::here("results", "01_load_and_compute_entropy", "tables")
 dir_tables_03  <- here::here("results", "03_compute_alternative_entropies", "tables")
 dir_tables_06  <- here::here("results", "06_compute_spanorm_entropy", "tables")

@@ -52,7 +52,7 @@ for (sample_name in samples_to_process) {
   sd_plugin    <- sd(df_plugin$entropy[is.finite(df_plugin$entropy)])
   sd_chao_shen <- sd(df_alt$chao_shen_entropy[is.finite(df_alt$chao_shen_entropy)])
   sd_cwj       <- sd(df_alt$cwj_entropy[is.finite(df_alt$cwj_entropy)])
-  sd_spanorm   <- sd(df_spanorm$spanorm_entropy[is.finite(df_spanorm[[spanorm_col]])])
+  sd_spanorm   <- sd(df_spanorm$spanorm_entropy[is.finite(df_spanorm$spanorm_entropy)])
   
   summary_list[[sample_name]] <- data.frame(
     sample    = sample_name,

@@ -1,5 +1,3 @@
-# 1. Configuration and dependencies
-
 #SAMPLES_TO_RUN <- "sample1"
 SAMPLES_TO_RUN <- "all"
 
@@ -59,7 +57,7 @@ method_colors <- c(
   "SpaNorm"              = "#7570b3"
 )
 
-# 2. Per-sample processing loop
+# 2. loop
 
 for (sample_name in samples_to_process) {
   message("Analyzing: ", sample_name)
@@ -216,7 +214,7 @@ for (sample_name in samples_to_process) {
   message("-> Saved diagnostic plot to: ", fig_path)
 }
 
-# 3. Cohort-wide summary tables and overview plots
+# 3. plots
 
 if (length(summary_list) > 0) {
   summary_df <- do.call(rbind, summary_list)

@@ -29,6 +29,7 @@ dependencies:
   - r-safetensors=0.2.0
   #- quarto
   - r-rmarkdown
+  - r-presto
   - _openmp_mutex=4.5=20_gnu
   - _r-mutex=1.0.1=anacondar_1
   - binutils_impl_linux-64=2.45.1=default_hfdba357_102

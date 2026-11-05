@@ -275,7 +275,7 @@ if (length(summary_list) > 0) {
     plot_df <- rbind(
       data.frame(
         sample = summary_df$sample,
-        method = "Plug-in",
+        method = "Plug-in (Raw)",
         rho    = summary_df$spearman_rho_plugin
       ),
       data.frame(
@@ -285,7 +285,7 @@ if (length(summary_list) > 0) {
       ),
       data.frame(
         sample = summary_df$sample,
-        method = "Chao-Wang-Jost",
+        method = "Chao-Wang-Jost (CWJ)",
         rho    = summary_df$spearman_rho_cwj
       ),
       data.frame(

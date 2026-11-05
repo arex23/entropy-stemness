@@ -1,5 +1,5 @@
-SAMPLES_TO_RUN <- "sample1"
-#SAMPLES_TO_RUN <- "all"
+#SAMPLES_TO_RUN <- "sample1"
+SAMPLES_TO_RUN <- "all"
 
 MIN_SPOT_PROP <- 0.10
 
@@ -65,14 +65,15 @@ for (sample_name in samples_to_process) {
   n_spots_total <- ncol(counts_mat)
   
   spot_prop  <- Matrix::rowSums(counts_mat > 0) / n_spots_total
-  keep_genes <- names(spot_prop)[spot_prop >= MIN_SPOT_PROP]
+  is_mt_gene <- grepl("^MT-", names(spot_prop), ignore.case = TRUE)
+  keep_genes <- names(spot_prop)[spot_prop >= MIN_SPOT_PROP & !is_mt_gene]
   if (length(keep_genes) == 0) {
     stop("No genes passed the filter for ", sample_name)
   }
   
   seurat_obj <- subset(seurat_obj, features = keep_genes)
   counts_mat <- Seurat::GetAssayData(seurat_obj, assay = "Spatial", layer = "counts")
-  rm(spot_prop, keep_genes)
+  rm(spot_prop, is_mt_gene, keep_genes)
   
   spot_totals <- Matrix::colSums(counts_mat)
   if (any(spot_totals == 0)) {
@@ -91,10 +92,14 @@ for (sample_name in samples_to_process) {
   }
   rm(spot_totals)
   
+  # Update nCount_Spatial and nFeature_Spatial to reflect the filtered (non-MT) matrix
+  seurat_obj$nCount_Spatial   <- Matrix::colSums(counts_mat)
+  seurat_obj$nFeature_Spatial <- Matrix::colSums(counts_mat > 0)
+  
   n_genes_kept <- nrow(counts_mat)
   n_spots_kept <- ncol(counts_mat)
   message(sprintf(
-    "-> Keeping %d / %d genes across %d / %d spots (min spot proportion >= %.2f)",
+    "-> Keeping %d / %d non-MT genes across %d / %d spots (min spot proportion >= %.2f)",
     n_genes_kept, n_genes_total, n_spots_kept, n_spots_total, MIN_SPOT_PROP
   ))
   

@@ -13,8 +13,8 @@
 
 # 1. Configuration and dependencies
 
-SAMPLES_TO_RUN <- "sample1"
-#SAMPLES_TO_RUN <- "all"
+#SAMPLES_TO_RUN <- "sample1"
+SAMPLES_TO_RUN <- "all"
 
 # Minimum proportion of spots in which a gene must be detected (count > 0)
 MIN_SPOT_PROP <- 0.10
@@ -136,10 +136,13 @@ for (sample_name in samples_to_process) {
   gene_total_counts   <- Matrix::rowSums(counts_mat)
   spot_prop           <- gene_spots_detected / n_spots_total
 
-  keep_genes          <- names(spot_prop)[spot_prop >= MIN_SPOT_PROP]
-  lost_genes          <- names(spot_prop)[spot_prop <  MIN_SPOT_PROP]
+  is_mt_gene          <- grepl("^MT-", names(spot_prop), ignore.case = TRUE)
+  n_mt_genes_removed  <- sum(is_mt_gene & gene_spots_detected > 0)
+
+  keep_genes          <- names(spot_prop)[spot_prop >= MIN_SPOT_PROP & !is_mt_gene]
+  lost_genes          <- names(spot_prop)[spot_prop <  MIN_SPOT_PROP |  is_mt_gene]
   zero_count_genes    <- names(spot_prop)[gene_spots_detected == 0]
-  filtered_rare_genes <- names(spot_prop)[gene_spots_detected > 0 & spot_prop < MIN_SPOT_PROP]
+  filtered_rare_genes <- names(spot_prop)[gene_spots_detected > 0 & (spot_prop < MIN_SPOT_PROP | is_mt_gene)]
 
   n_genes_detected        <- sum(gene_spots_detected > 0)
   n_genes_zero            <- length(zero_count_genes)
@@ -200,10 +203,11 @@ for (sample_name in samples_to_process) {
     100 * n_genes_zero / n_genes_total
   ))
   message(sprintf(
-    "-> Breakdown of %d removed genes: %d had 0 counts (no entropy effect) + %d were active rare genes (<10%% spots)",
+    "-> Breakdown of %d removed genes: %d had 0 counts + %d were active rare (<10%% spots) or mitochondrial (%d MT genes)",
     length(lost_genes),
     n_genes_zero,
-    n_genes_filtered_active
+    n_genes_filtered_active,
+    n_mt_genes_removed
   ))
   message(sprintf(
     "-> Entropy-relevant filter impact: keeping %d / %d active genes (%.1f%% of active genes removed, representing %.2f%% of total UMI counts)",
@@ -242,7 +246,7 @@ for (sample_name in samples_to_process) {
   }
 
   # E. Subset Seurat object to kept genes and remove any resulting zero-count spots
-  rm(counts_mat, gene_spots_detected, gene_total_counts, spot_prop)
+  rm(counts_mat, gene_spots_detected, gene_total_counts, spot_prop, is_mt_gene)
 
   seurat_obj <- subset(seurat_obj, features = keep_genes)
   counts_mat <- Seurat::GetAssayData(seurat_obj, assay = "Spatial", layer = "counts")
@@ -263,6 +267,10 @@ for (sample_name in samples_to_process) {
     counts_mat <- Seurat::GetAssayData(seurat_obj, assay = "Spatial", layer = "counts")
   }
   rm(spot_totals)
+
+  # Update nCount_Spatial and nFeature_Spatial to reflect the filtered (non-MT) matrix
+  seurat_obj$nCount_Spatial   <- Matrix::colSums(counts_mat)
+  seurat_obj$nFeature_Spatial <- Matrix::colSums(counts_mat > 0)
 
   n_genes_kept       <- nrow(counts_mat)
   n_spots_kept       <- ncol(counts_mat)

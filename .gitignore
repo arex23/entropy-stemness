@@ -28,6 +28,9 @@ data/raw/*
 !data/raw/.gitkeep
 results/**/objects/*
 !results/**/objects/.gitkeep
+#this line is for the second branch only, for now
+results/**/figures/sample*.png
+  
 # this way the project structure on github remains consistent
 # it also saves plots and tables for sharing purposes
 
